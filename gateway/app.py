@@ -21,6 +21,7 @@ logger = logging.getLogger("computer.gateway")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 DEFAULT_TTL = int(os.environ.get("SESSION_TTL_SEC", "600"))
+PARKED_TTL = int(os.environ.get("PARKED_TTL_SEC", "1800"))
 PUBLIC_BASE = os.environ.get("GATEWAY_PUBLIC_BASE", "http://localhost:9000").rstrip("/")
 API_TOKEN = os.environ.get("COMPUTER_API_TOKEN", "").strip()
 
@@ -40,15 +41,20 @@ def _parse_workers() -> list[tuple[str, str]]:
     return list(zip(urls, vncs, strict=True))
 
 
-pool = SessionPool(_parse_workers(), default_ttl_sec=DEFAULT_TTL)
+pool = SessionPool(
+    _parse_workers(),
+    default_ttl_sec=DEFAULT_TTL,
+    parked_ttl_sec=PARKED_TTL,
+)
 
 _security = HTTPBearer(auto_error=False)
 
 
 def _reaper_loop(stop: threading.Event) -> None:
     while not stop.wait(15):
+        # Lease TTL → park (no reset). Parked idle TTL → free + Firefox reset.
         for worker_url in pool.sweep_expired():
-            logger.info("ttl expired; resetting worker %s", worker_url)
+            logger.info("parked idle TTL; recycling worker %s", worker_url)
             pool.reset_worker(worker_url)
 
 
@@ -155,6 +161,7 @@ def health():
         "service": "computer-gateway",
         "workers": pool.worker_count,
         "leased": pool.leased_count(),
+        "parked": pool.parked_count(),
         "free": pool.free_count(),
     }
 
@@ -171,6 +178,7 @@ def ready():
         "healthy_workers": healthy,
         "free": free,
         "leased": pool.leased_count(),
+        "parked": pool.parked_count(),
     }
     if not accept_new:
         return JSONResponse(status_code=503, content=body)
@@ -210,12 +218,13 @@ def heartbeat(session_id: str, _: AuthDep, body: HeartbeatRequest = HeartbeatReq
 
 @app.delete("/v1/sessions/{session_id}", tags=["sessions"])
 def delete_session(session_id: str, _: AuthDep):
-    worker_url = pool.release(session_id)
-    if not worker_url:
+    """Soft release: park the warm desktop (no Firefox reset). Use ?recycle=true to wipe."""
+    # recycle query wiring lands in gateway-routes; soft park is the default now.
+    info = pool.release(session_id)
+    if not info:
         raise HTTPException(status_code=404, detail="session not found or expired")
-    pool.reset_worker(worker_url)
-    logger.info("released session=%s worker=%s", session_id, worker_url)
-    return {"ok": True, "session_id": session_id}
+    logger.info("parked session=%s worker=%s", session_id, info.worker_base_url)
+    return {"ok": True, "session_id": session_id, "parked": True}
 
 
 @app.get("/v1/sessions/{session_id}/screenshot", tags=["observe"])
