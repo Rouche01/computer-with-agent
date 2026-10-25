@@ -76,6 +76,7 @@ services:
       WORKER_URLS: http://worker-1:8000,http://worker-2:8000
       WORKER_VNC_URLS: ${WORKER_VNC_URLS:-http://localhost:6081/vnc.html,http://localhost:6082/vnc.html}
       SESSION_TTL_SEC: ${SESSION_TTL_SEC:-600}
+      PARKED_TTL_SEC: ${PARKED_TTL_SEC:-1800}
     depends_on:
       worker-1:
         condition: service_healthy

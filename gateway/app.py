@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
@@ -72,9 +72,10 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="Computer Runtime Gateway",
-    version="0.1.0",
+    version="0.2.0",
     description=(
-        "Model-agnostic desktop sessions: lease a worker, screenshot/act, release. "
+        "Model-agnostic desktop sessions: lease a worker, screenshot/act, soft-release "
+        "(park warm Firefox), acquire or job_id-reattach, recycle to wipe. "
         "Inference stays outside — any agent can bind via this OpenAPI."
     ),
     lifespan=lifespan,
@@ -110,6 +111,11 @@ class LeaseResponse(BaseModel):
 
 class HeartbeatRequest(BaseModel):
     ttl_sec: int | None = Field(default=None, ge=30, le=86400)
+
+
+class AcquireRequest(BaseModel):
+    ttl_sec: int | None = Field(default=None, ge=30, le=86400)
+    agent_id: str | None = None
 
 
 class ActionBody(BaseModel):
@@ -191,12 +197,18 @@ def create_session(
     body: LeaseRequest = LeaseRequest(),
     x_job_id: Annotated[str | None, Header()] = None,
 ):
+    """Lease a free worker, or reattach a parked desktop when job_id matches."""
     job_id = body.job_id or x_job_id
     info = pool.lease(agent_id=body.agent_id, job_id=job_id, ttl_sec=body.ttl_sec)
     if not info:
         raise HTTPException(
             status_code=503,
-            detail={"ok": False, "error": "no free workers", "free": 0},
+            detail={
+                "ok": False,
+                "error": "no free workers",
+                "free": pool.free_count(),
+                "parked": pool.parked_count(),
+            },
         )
     logger.info(
         "leased session=%s agent=%s job=%s worker=%s",
@@ -216,15 +228,60 @@ def heartbeat(session_id: str, _: AuthDep, body: HeartbeatRequest = HeartbeatReq
     return _lease_response(info)
 
 
+@app.post("/v1/sessions/{session_id}/acquire", response_model=LeaseResponse, tags=["sessions"])
+def acquire_session(
+    session_id: str,
+    _: AuthDep,
+    body: AcquireRequest = AcquireRequest(),
+):
+    """Re-lease a parked desktop by session_id (serial same-job leases)."""
+    result = pool.acquire(
+        session_id,
+        ttl_sec=body.ttl_sec,
+        agent_id=body.agent_id,
+    )
+    if result.error == "not_found":
+        raise HTTPException(status_code=404, detail="session not found or expired")
+    if result.error == "already_leased":
+        raise HTTPException(status_code=409, detail="session already leased")
+    assert result.info is not None
+    logger.info(
+        "acquired session=%s worker=%s",
+        session_id,
+        result.info.worker_base_url,
+    )
+    return _lease_response(result.info)
+
+
 @app.delete("/v1/sessions/{session_id}", tags=["sessions"])
-def delete_session(session_id: str, _: AuthDep):
-    """Soft release: park the warm desktop (no Firefox reset). Use ?recycle=true to wipe."""
-    # recycle query wiring lands in gateway-routes; soft park is the default now.
+def delete_session(
+    session_id: str,
+    _: AuthDep,
+    recycle: Annotated[bool, Query(description="Wipe Firefox and free the worker")] = False,
+):
+    """Soft release parks the warm desktop. Pass recycle=true to wipe and free."""
+    if recycle:
+        return _recycle_session(session_id)
     info = pool.release(session_id)
     if not info:
         raise HTTPException(status_code=404, detail="session not found or expired")
     logger.info("parked session=%s worker=%s", session_id, info.worker_base_url)
     return {"ok": True, "session_id": session_id, "parked": True}
+
+
+def _recycle_session(session_id: str) -> dict:
+    worker_url = pool.recycle(session_id)
+    if not worker_url:
+        raise HTTPException(status_code=404, detail="session not found or expired")
+    pool.reset_worker(worker_url)
+    logger.info("recycled session=%s worker=%s", session_id, worker_url)
+    return {"ok": True, "session_id": session_id, "recycled": True}
+
+
+@app.post("/v1/sessions/{session_id}/recycle", tags=["sessions"])
+def recycle_session(session_id: str, _: AuthDep):
+    """Wipe Firefox and free the worker (from leased or parked)."""
+    return _recycle_session(session_id)
 
 
 @app.get("/v1/sessions/{session_id}/screenshot", tags=["observe"])
