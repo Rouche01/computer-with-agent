@@ -8,9 +8,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install fastapi uvicorn
+RUN useradd -m -u 1000 agent
+
 COPY server /opt/server
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && useradd -m -u 1000 agent
+COPY scripts/start-firefox.sh /opt/start-firefox.sh
+COPY profile/user.js /home/agent/.mozilla/firefox/relay-agent/user.js
+COPY profile/profiles.ini /home/agent/.mozilla/firefox/profiles.ini
+
+RUN chmod +x /entrypoint.sh /opt/start-firefox.sh \
+    && chown -R agent:agent /home/agent/.mozilla
 
 USER agent
 WORKDIR /home/agent

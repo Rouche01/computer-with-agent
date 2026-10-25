@@ -1,12 +1,22 @@
 import base64
 import os
+import shutil
 import subprocess
+import time
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 app = FastAPI()
 
 DISPLAY = os.environ.get("DISPLAY", ":1")
+START_FIREFOX = os.environ.get("START_FIREFOX", "/opt/start-firefox.sh")
+FIREFOX_PROFILE = os.environ.get(
+    "FIREFOX_PROFILE",
+    "/home/agent/.mozilla/firefox/relay-agent",
+)
+PROFILE_NAME = "relay-agent"
 
 
 def xdo(*args):
@@ -58,13 +68,43 @@ def health():
     return body
 
 
-START_FIREFOX = os.environ.get("START_FIREFOX", "/opt/start-firefox.sh")
+def _firefox_running() -> bool:
+    r = _run(["pgrep", "-f", "firefox-esr"], timeout=5)
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
+def _stop_firefox() -> None:
+    _run(["pkill", "-TERM", "-f", "firefox-esr"], timeout=10)
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        if not _firefox_running():
+            return
+        time.sleep(0.2)
+    if _firefox_running():
+        _run(["pkill", "-KILL", "-f", "firefox-esr"], timeout=10)
+        time.sleep(0.3)
+
+
+def _clear_sessionstore(profile: Path) -> None:
+    """Idempotent wipe of crash/session restore artifacts."""
+    if not profile.is_dir():
+        return
+    for name in ("sessionstore.jsonlz4", "recovery.jsonlz4", ".parentlock"):
+        try:
+            (profile / name).unlink(missing_ok=True)
+        except OSError:
+            pass
+    backups = profile / "sessionstore-backups"
+    if backups.exists():
+        shutil.rmtree(backups, ignore_errors=True)
 
 
 @app.post("/session/reset")
 def session_reset():
     """Recycle the browser session without restarting the whole container."""
-    _run(["pkill", "-f", "firefox-esr"], timeout=10)
+    _stop_firefox()
+    profile = Path(FIREFOX_PROFILE)
+    _clear_sessionstore(profile)
     try:
         subprocess.Popen(
             [START_FIREFOX],
@@ -76,7 +116,9 @@ def session_reset():
             status_code=500,
             detail=f"{START_FIREFOX} not found",
         ) from e
-    return {"ok": True, "reset": "firefox"}
+    # Brief settle so the first screenshot/action is not mid-startup.
+    time.sleep(1.5)
+    return {"ok": True, "reset": "firefox", "profile": PROFILE_NAME}
 
 
 
