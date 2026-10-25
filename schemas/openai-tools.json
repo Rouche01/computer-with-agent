@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Computer Runtime — OpenAI-compatible function tools",
+  "description": "Pass these as tools[].function (or Chat Completions tools) to any OpenAI-compatible model. Your agent must hold a leased session_id and map each call to the gateway HTTP API. display_width_px / display_height_px should match the worker (default 1280×800).",
+  "session": {
+    "lease": "POST /v1/sessions",
+    "screenshot": "GET /v1/sessions/{session_id}/screenshot",
+    "action": "POST /v1/sessions/{session_id}/action",
+    "heartbeat": "POST /v1/sessions/{session_id}/heartbeat",
+    "release": "DELETE /v1/sessions/{session_id}"
+  },
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "computer_screenshot",
+        "description": "Capture the current desktop as a PNG. Returns base64 image data from the gateway.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "http": {
+        "method": "GET",
+        "path": "/v1/sessions/{session_id}/screenshot"
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "computer_click",
+        "description": "Move to (x, y) and left-click once. Coordinates are pixels from the top-left of the display.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "x": { "type": "integer", "minimum": 0 },
+            "y": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["x", "y"],
+          "additionalProperties": false
+        }
+      },
+      "http": {
+        "method": "POST",
+        "path": "/v1/sessions/{session_id}/action",
+        "body": { "type": "click", "x": "$x", "y": "$y" }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "computer_double_click",
+        "description": "Move to (x, y) and double left-click.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "x": { "type": "integer", "minimum": 0 },
+            "y": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["x", "y"],
+          "additionalProperties": false
+        }
+      },
+      "http": {
+        "method": "POST",
+        "path": "/v1/sessions/{session_id}/action",
+        "body": { "type": "double_click", "x": "$x", "y": "$y" }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "computer_right_click",
+        "description": "Move to (x, y) and right-click.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "x": { "type": "integer", "minimum": 0 },
+            "y": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["x", "y"],
+          "additionalProperties": false
+        }
+      },
+      "http": {
+        "method": "POST",
+        "path": "/v1/sessions/{session_id}/action",
+        "body": { "type": "right_click", "x": "$x", "y": "$y" }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "computer_move",
+        "description": "Move the mouse pointer to (x, y) without clicking.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "x": { "type": "integer", "minimum": 0 },
+            "y": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["x", "y"],
+          "additionalProperties": false
+        }
+      },
+      "http": {
+        "method": "POST",
+        "path": "/v1/sessions/{session_id}/action",
+        "body": { "type": "move", "x": "$x", "y": "$y" }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "computer_type",
+        "description": "Type text into the focused window (Unicode string).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "text": { "type": "string", "minLength": 1 }
+          },
+          "required": ["text"],
+          "additionalProperties": false
+        }
+      },
+      "http": {
+        "method": "POST",
+        "path": "/v1/sessions/{session_id}/action",
+        "body": { "type": "type", "text": "$text" }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "computer_key",
+        "description": "Press a key or chord via xdotool syntax, e.g. Return, Tab, ctrl+l, ctrl+a, Escape.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "key": { "type": "string", "minLength": 1 }
+          },
+          "required": ["key"],
+          "additionalProperties": false
+        }
+      },
+      "http": {
+        "method": "POST",
+        "path": "/v1/sessions/{session_id}/action",
+        "body": { "type": "key", "text": "$key" }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "computer_scroll",
+        "description": "Scroll the focused window. direction is up or down; amount is click repeats (default 3).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "direction": {
+              "type": "string",
+              "enum": ["up", "down"],
+              "default": "down"
+            },
+            "amount": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 3
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "http": {
+        "method": "POST",
+        "path": "/v1/sessions/{session_id}/action",
+        "body": {
+          "type": "scroll",
+          "direction": "$direction",
+          "amount": "$amount"
+        }
+      }
+    }
+  ]
+}

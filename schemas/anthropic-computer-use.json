@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Computer Runtime — Anthropic computer-use shaped actions",
+  "description": "Maps common Anthropic computer-use action names to this gateway's POST /v1/sessions/{id}/action body. Your host still runs the agent loop: model emits an action → you HTTP-execute → return screenshot. display_width_px/display_height_px default 1280×800.",
+  "display_width_px": 1280,
+  "display_height_px": 800,
+  "tool_declaration_example": {
+    "type": "computer_20241022",
+    "name": "computer",
+    "display_width_px": 1280,
+    "display_height_px": 800,
+    "display_number": 1
+  },
+  "session": {
+    "lease": "POST /v1/sessions",
+    "screenshot": "GET /v1/sessions/{session_id}/screenshot",
+    "action": "POST /v1/sessions/{session_id}/action",
+    "release": "DELETE /v1/sessions/{session_id}"
+  },
+  "actions": [
+    {
+      "anthropic": { "action": "screenshot" },
+      "http": {
+        "method": "GET",
+        "path": "/v1/sessions/{session_id}/screenshot"
+      },
+      "notes": "Return the gateway JSON { image: <base64 png> } to the model as an image block."
+    },
+    {
+      "anthropic": { "action": "left_click", "coordinate": ["$x", "$y"] },
+      "gateway": { "type": "click", "x": "$x", "y": "$y" }
+    },
+    {
+      "anthropic": { "action": "double_click", "coordinate": ["$x", "$y"] },
+      "gateway": { "type": "double_click", "x": "$x", "y": "$y" }
+    },
+    {
+      "anthropic": { "action": "right_click", "coordinate": ["$x", "$y"] },
+      "gateway": { "type": "right_click", "x": "$x", "y": "$y" }
+    },
+    {
+      "anthropic": { "action": "mouse_move", "coordinate": ["$x", "$y"] },
+      "gateway": { "type": "move", "x": "$x", "y": "$y" }
+    },
+    {
+      "anthropic": { "action": "type", "text": "$text" },
+      "gateway": { "type": "type", "text": "$text" }
+    },
+    {
+      "anthropic": { "action": "key", "text": "$key" },
+      "gateway": { "type": "key", "text": "$key" },
+      "notes": "Use xdotool key names (Return, ctrl+l). Map Anthropic key combos accordingly."
+    },
+    {
+      "anthropic": {
+        "action": "scroll",
+        "coordinate": ["$x", "$y"],
+        "scroll_direction": "$direction",
+        "scroll_amount": "$amount"
+      },
+      "gateway": {
+        "type": "scroll",
+        "direction": "$direction",
+        "amount": "$amount"
+      },
+      "notes": "Optional: move to coordinate first with type=move. direction must be up|down."
+    }
+  ],
+  "unsupported_in_v0": [
+    "left_click_drag",
+    "middle_click",
+    "triple_click",
+    "cursor_position",
+    "hold_key",
+    "wait"
+  ]
+}
