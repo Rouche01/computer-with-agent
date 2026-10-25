@@ -1,0 +1,101 @@
+# Computer Runtime: gateway (public) + exclusive desktop workers (internal).
+# Lease/TTL recycle is handled by the gateway; release calls worker /session/reset.
+#
+#   docker compose up --build
+#   export COMPUTER_API_TOKEN=dev-token   # must match .env
+#   curl -s -H "Authorization: Bearer $COMPUTER_API_TOKEN" \
+#     -X POST http://localhost:9000/v1/sessions
+
+services:
+  worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: computer-with-agent-worker:local
+    hostname: worker-1
+    networks: [computer_internal]
+    # noVNC for humans / HITL (control API stays internal-only)
+    ports:
+      - "6081:6080"
+    environment:
+      WIDTH: ${WIDTH:-1280}
+      HEIGHT: ${HEIGHT:-800}
+    shm_size: "256mb"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    restart: unless-stopped
+
+  worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: computer-with-agent-worker:local
+    hostname: worker-2
+    networks: [computer_internal]
+    ports:
+      - "6082:6080"
+    environment:
+      WIDTH: ${WIDTH:-1280}
+      HEIGHT: ${HEIGHT:-800}
+    shm_size: "256mb"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    image: computer-with-agent-gateway:local
+    networks: [computer_internal]
+    ports:
+      - "9000:9000"
+    environment:
+      COMPUTER_API_TOKEN: ${COMPUTER_API_TOKEN:-dev-token}
+      GATEWAY_PUBLIC_BASE: ${GATEWAY_PUBLIC_BASE:-http://localhost:9000}
+      WORKER_URLS: http://worker-1:8000,http://worker-2:8000
+      WORKER_VNC_URLS: ${WORKER_VNC_URLS:-http://localhost:6081/vnc.html,http://localhost:6082/vnc.html}
+      SESSION_TTL_SEC: ${SESSION_TTL_SEC:-600}
+    depends_on:
+      worker-1:
+        condition: service_healthy
+      worker-2:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  computer_internal:
+    driver: bridge
+    name: computer_internal
