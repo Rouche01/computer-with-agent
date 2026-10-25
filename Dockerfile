@@ -1,0 +1,18 @@
+FROM debian:bookworm-slim
+ENV DEBIAN_FRONTEND=noninteractive DISPLAY=:1 WIDTH=1280 HEIGHT=800
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    xvfb xfce4 xfce4-terminal dbus-x11 x11vnc novnc websockify \
+    xdotool scrot xclip firefox-esr python3 python3-venv \
+    fonts-dejavu ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install fastapi uvicorn
+COPY server /opt/server
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh && useradd -m -u 1000 agent
+
+USER agent
+WORKDIR /home/agent
+EXPOSE 6080 8000
+ENTRYPOINT ["/entrypoint.sh"]
