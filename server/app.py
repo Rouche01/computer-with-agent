@@ -58,19 +58,26 @@ def health():
     return body
 
 
+START_FIREFOX = os.environ.get("START_FIREFOX", "/opt/start-firefox.sh")
+
+
 @app.post("/session/reset")
 def session_reset():
     """Recycle the browser session without restarting the whole container."""
     _run(["pkill", "-f", "firefox-esr"], timeout=10)
     try:
         subprocess.Popen(
-            ["firefox-esr"],
+            [START_FIREFOX],
             env={**os.environ, "DISPLAY": DISPLAY},
             start_new_session=True,
         )
     except FileNotFoundError as e:
-        raise HTTPException(status_code=500, detail="firefox-esr not found") from e
+        raise HTTPException(
+            status_code=500,
+            detail=f"{START_FIREFOX} not found",
+        ) from e
     return {"ok": True, "reset": "firefox"}
+
 
 
 @app.get("/screenshot")
