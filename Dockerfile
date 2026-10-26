@@ -1,5 +1,6 @@
 FROM debian:bookworm-slim
-ENV DEBIAN_FRONTEND=noninteractive DISPLAY=:1 WIDTH=1280 HEIGHT=800
+# HEIGHT is derived in entrypoint from ASPECT_RATIO × WIDTH when unset (16:10 → 800).
+ENV DEBIAN_FRONTEND=noninteractive DISPLAY=:1 ASPECT_RATIO=16:10 WIDTH=1280
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb xfce4 xfce4-terminal dbus-x11 x11vnc novnc websockify \

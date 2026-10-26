@@ -54,7 +54,7 @@ Pool states: **free** → **leased** → **parked** (idle TTL) → free after re
 - **Do not** put LLM calls in the gateway or worker. Bind models via `BINDING.md` / `schemas/`.
 - Prefer **warm pool + park/reset** over spinning containers or K8s unless capacity/isolation forces it.
 - Keep worker `:8000` off the public/tailnet face; publish noVNC + gateway via Caddy (or localhost only).
-- Display default **1280×800** (`WIDTH`/`HEIGHT`). VNC uses **local** `resize=scale`, not remote desktop resize.
+- Display: set **`ASPECT_RATIO`** (e.g. `16:9`, `16:10`) + **`WIDTH`**; `entrypoint.sh` derives `HEIGHT` (default `16:10` → 1280×800). Explicit `WIDTH`+`HEIGHT` with empty `ASPECT_RATIO` still works. VNC uses **local** `resize=scale`, not remote desktop resize.
 - Gateway injects `autoconnect=1&resize=scale` on lease `vnc_url` if missing.
 
 ### Env that matters

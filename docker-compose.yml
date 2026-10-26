@@ -18,8 +18,10 @@ services:
     ports:
       - "6081:6080"
     environment:
+      ASPECT_RATIO: ${ASPECT_RATIO:-16:10}
       WIDTH: ${WIDTH:-1280}
-      HEIGHT: ${HEIGHT:-800}
+      # Optional override; if unset, entrypoint derives from ASPECT_RATIO × WIDTH
+      HEIGHT: ${HEIGHT:-}
     shm_size: "256mb"
     healthcheck:
       test:
@@ -45,8 +47,9 @@ services:
     ports:
       - "6082:6080"
     environment:
+      ASPECT_RATIO: ${ASPECT_RATIO:-16:10}
       WIDTH: ${WIDTH:-1280}
-      HEIGHT: ${HEIGHT:-800}
+      HEIGHT: ${HEIGHT:-}
     shm_size: "256mb"
     healthcheck:
       test:
