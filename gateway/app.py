@@ -9,6 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Annotated
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
@@ -26,14 +27,32 @@ PUBLIC_BASE = os.environ.get("GATEWAY_PUBLIC_BASE", "http://localhost:9000").rst
 API_TOKEN = os.environ.get("COMPUTER_API_TOKEN", "").strip()
 
 
+def _with_vnc_view_defaults(url: str) -> str:
+    """Ensure lease vnc_url autoconnects and locally scales to the browser window."""
+    u = url.strip()
+    if not u:
+        return u
+    parsed = urlparse(u)
+    q = parse_qs(parsed.query, keep_blank_values=True)
+    if "autoconnect" not in q:
+        q["autoconnect"] = ["1"]
+    if "resize" not in q:
+        q["resize"] = ["scale"]
+    new_query = urlencode({k: v[-1] for k, v in q.items()})
+    return urlunparse(parsed._replace(query=new_query))
+
+
 def _parse_workers() -> list[tuple[str, str]]:
     """WORKER_URLS and WORKER_VNC_URLS are comma-separated parallel lists."""
     urls = [u.strip() for u in os.environ.get("WORKER_URLS", "http://127.0.0.1:8000").split(",") if u.strip()]
     vncs_raw = os.environ.get("WORKER_VNC_URLS", "").strip()
     if vncs_raw:
-        vncs = [v.strip() for v in vncs_raw.split(",")]
+        vncs = [_with_vnc_view_defaults(v) for v in vncs_raw.split(",") if v.strip()]
     else:
-        vncs = [f"http://127.0.0.1:{6080 + i}/vnc.html" for i in range(len(urls))]
+        vncs = [
+            _with_vnc_view_defaults(f"http://127.0.0.1:{6080 + i}/vnc.html")
+            for i in range(len(urls))
+        ]
     if len(vncs) != len(urls):
         raise RuntimeError(
             f"WORKER_URLS ({len(urls)}) and WORKER_VNC_URLS ({len(vncs)}) length mismatch"
