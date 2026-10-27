@@ -72,7 +72,7 @@ Pool states: **free** → **leased** → **parked** (idle TTL) → free after re
 
 Match relay-os deploy style: backends on `127.0.0.1`, Caddy Host routing, laptop `/etc/hosts` → Tailscale IP.
 
-Suggested names: **`desk.hsv`** (gateway), **`desk1.hsv`** / **`desk2.hsv`** (noVNC).
+Suggested names: **`desk.hsv`** / **`desk1.hsv`** / **`desk2.hsv`**, or the live Desk deploy pair **`cu-gateway.hsv`** / **`cu1.hsv`** / **`cu2.hsv`**. Laptop install + Settings: `relay-os/apps/relay-desk/LAPTOP.md`.
 
 On deploy hosts, bind Compose ports to loopback:
 
