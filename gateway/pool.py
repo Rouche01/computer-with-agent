@@ -150,6 +150,27 @@ class SessionPool:
             self._park_expired_leases_locked(_utcnow())
             return sum(1 for s in self._slots if s.state == "parked")
 
+    def list_seats(self) -> list[dict[str, Any]]:
+        """Per-worker inventory for ops / Desk (state, session, vnc)."""
+        with self._lock:
+            now = _utcnow()
+            self._park_expired_leases_locked(now)
+            seats: list[dict[str, Any]] = []
+            for i, slot in enumerate(self._slots):
+                seat: dict[str, Any] = {
+                    "id": f"desk{i + 1}",
+                    "state": slot.state,
+                    "vnc_url": slot.vnc_url,
+                    "worker_base_url": slot.base_url,
+                    "session_id": slot.session_id,
+                    "agent_id": slot.agent_id,
+                    "job_id": slot.job_id,
+                    "expires_at": slot.expires_at.isoformat() if slot.expires_at else None,
+                    "parked_at": slot.parked_at.isoformat() if slot.parked_at else None,
+                }
+                seats.append(seat)
+            return seats
+
     def lease(
         self,
         *,

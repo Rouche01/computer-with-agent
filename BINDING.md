@@ -194,4 +194,5 @@ try {
 - Send `X-Job-Id` (or body `job_id`) so serial steps can reattach and logs correlate.
 - Open `vnc_url` for human watch / HITL; do not expose worker `:8000` publicly.
 - `/health` and `/ready` report `free` / `leased` / `parked` — only **free** seats accept unrelated new leases.
+- `GET /v1/seats` (auth) lists each worker with `state`, `session_id`, `vnc_url`, `job_id` so operators can Watch / Acquire / Recycle abandoned parks without guessing ids.
 - Compose: `docker compose up --build` then bind against port **9000**.

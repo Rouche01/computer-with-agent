@@ -43,7 +43,8 @@ Base: `/v1` · Auth: `Authorization: Bearer $COMPUTER_API_TOKEN` (optional if to
 | `POST` | `/v1/sessions/{id}/recycle` | Hard wipe + free |
 | `GET` | `/v1/sessions/{id}/screenshot` | Base64 PNG |
 | `POST` | `/v1/sessions/{id}/action` | Forward to worker (`click`, `type`, `key`, …) |
-| `GET` | `/health` · `/ready` | Ops |
+| `GET` | `/v1/seats` | Per-worker inventory (`free`/`leased`/`parked` + `session_id`/`vnc_url`/`job_id`) |
+| `GET` | `/health` · `/ready` | Ops aggregates |
 
 Worker (internal): `GET /health`, `GET /screenshot`, `POST /action`, `POST /session/reset`.
 

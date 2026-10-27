@@ -28,7 +28,12 @@ API_TOKEN = os.environ.get("COMPUTER_API_TOKEN", "").strip()
 
 
 def _with_vnc_view_defaults(url: str) -> str:
-    """Ensure lease vnc_url autoconnects and locally scales to the browser window."""
+    """Ensure lease vnc_url works behind Caddy HTTPS + stock websockify.
+
+    - autoconnect + local resize=scale
+    - path= → WS at / (websockify --web); default /websockify often 404s
+    - port=443 when page is https on standard TLS (old noVNC may dial :6080)
+    """
     u = url.strip()
     if not u:
         return u
@@ -38,7 +43,18 @@ def _with_vnc_view_defaults(url: str) -> str:
         q["autoconnect"] = ["1"]
     if "resize" not in q:
         q["resize"] = ["scale"]
-    new_query = urlencode({k: v[-1] for k, v in q.items()})
+    # keep_blank_values: empty path must remain ""
+    if "path" not in q:
+        q["path"] = [""]
+    if parsed.scheme == "https" and "port" not in q:
+        # Only force 443 when URL has no explicit :port (Caddy on :443)
+        if not parsed.port:
+            q["port"] = ["443"]
+    # urlencode skips empty values by default unless doseq; preserve empty path
+    pairs: list[tuple[str, str]] = []
+    for k, vals in q.items():
+        pairs.append((k, vals[-1]))
+    new_query = urlencode(pairs)
     return urlunparse(parsed._replace(query=new_query))
 
 
@@ -188,6 +204,20 @@ def health():
         "leased": pool.leased_count(),
         "parked": pool.parked_count(),
         "free": pool.free_count(),
+    }
+
+
+@app.get("/v1/seats", tags=["ops"])
+def list_seats(_: AuthDep):
+    """Per-worker inventory: state, session_id, vnc_url, job_id (for Desk inspect/recycle)."""
+    seats = pool.list_seats()
+    return {
+        "ok": True,
+        "workers": pool.worker_count,
+        "free": pool.free_count(),
+        "leased": pool.leased_count(),
+        "parked": pool.parked_count(),
+        "seats": seats,
     }
 
 
