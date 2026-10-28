@@ -1,6 +1,7 @@
 import base64
 import os
 import shutil
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -38,14 +39,26 @@ def _run(cmd: list[str], timeout: float = 5) -> subprocess.CompletedProcess[str]
     )
 
 
+def _port_open(port: int, host: str = "127.0.0.1") -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=1.0):
+            return True
+    except OSError:
+        return False
+
+
 @app.get("/health")
 def health():
-    """Liveness for the worker control API and X display."""
+    """Liveness for control API, X display, and VNC (noVNC downstream)."""
     # DISPLAY=:1 → socket /tmp/.X11-unix/X1 (no extra apt packages)
     display_num = DISPLAY.lstrip(":").split(".")[0]
     socket_path = f"/tmp/.X11-unix/X{display_num}"
     checks: dict[str, bool] = {
         "display_socket": os.path.exists(socket_path),
+        # Websockify alone is not enough — clients fail with
+        # "Failed to connect to downstream server" when :5900 is down (common after reboot).
+        "vnc_rfb": _port_open(5900),
+        "novnc_http": _port_open(6080),
     }
 
     try:
@@ -65,6 +78,8 @@ def health():
     }
     if geometry:
         body["geometry"] = geometry
+    if not ok:
+        raise HTTPException(status_code=503, detail=body)
     return body
 
 

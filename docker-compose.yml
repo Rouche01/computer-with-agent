@@ -31,10 +31,11 @@ services:
           "-c",
           "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
         ]
+      # Cold host reboot: X + x11vnc can take >45s; keep start_period generous.
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 45s
+      retries: 18
+      start_period: 90s
     restart: unless-stopped
 
   worker-2:
@@ -61,8 +62,8 @@ services:
         ]
       interval: 10s
       timeout: 5s
-      retries: 12
-      start_period: 45s
+      retries: 18
+      start_period: 90s
     restart: unless-stopped
 
   gateway:
